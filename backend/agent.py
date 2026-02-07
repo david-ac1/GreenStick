@@ -1,10 +1,15 @@
 from typing import Dict, Any, List, Optional
 from elasticsearch import Elasticsearch
 from datetime import datetime
+import google.generativeai as genai
+import os
+import json
 
 class GreenStickAgent:
-    def __init__(self, es_cloud_id: Optional[str] = None, es_api_key: Optional[str] = None, openai_api_key: Optional[str] = None, es_endpoint: Optional[str] = None):
+    def __init__(self, es_cloud_id: Optional[str] = None, es_api_key: Optional[str] = None, gemini_api_key: Optional[str] = None, es_endpoint: Optional[str] = None):
         self.es_client = None
+        
+        # Initialize Elasticsearch
         if (es_cloud_id or es_endpoint) and es_api_key:
             try:
                 if es_cloud_id:
@@ -23,13 +28,20 @@ class GreenStickAgent:
         else:
             print("Warning: Elasticsearch credentials not provided.")
 
+        # Initialize Gemini
+        if gemini_api_key:
+            genai.configure(api_key=gemini_api_key)
+            self.model = genai.GenerativeModel('gemini-2.0-flash')
+            print("Connected to Gemini")
+        else:
+            self.model = None
+            print("Warning: Gemini API key not provided.")
+
     async def analyze_incident(self, incident_id: str) -> Dict[str, Any]:
         """
-        Main workflow: Detect -> Search -> Correlate -> Plan
+        Main workflow: Detect -> Search -> Correlate -> Plan -> Execute
         """
-        # 1. Fetch Incident Data (from our simulated logs)
-        # In a real system, 'incident_id' might be a specific alert ID. 
-        # Here we'll treat it as a search term or trace ID.
+        # 1. Fetch Incident Data
         incident_data = self._fetch_recent_errors(incident_id)
         
         if not incident_data:
@@ -41,8 +53,11 @@ class GreenStickAgent:
         # 3. Correlate Events (ES|QL)
         correlations = self._correlate_events(incident_id)
         
-        # 4. Generate Remediation Plan (Mock LLM for now, can integrate real OpenAI)
-        plan = self._generate_plan(incident_data, history, correlations)
+        # 4. Generate Remediation Plan (Gemini)
+        plan = await self._generate_plan(incident_data, history, correlations)
+        
+        # 5. Execute Action (if confidence is high enough)
+        execution_result = await self._execute_action(plan)
         
         return {
             "incident_id": incident_id,
@@ -51,21 +66,18 @@ class GreenStickAgent:
             "historical_context": history,
             "correlations": correlations,
             "analysis": {
-                "root_cause_probability": 0.85, 
-                "summary": "High likelihood of database connection pool exhaustion based on historical patterns."
+                "root_cause_probability": plan.get("confidence", 0.0), 
+                "summary": plan.get("reasoning", "Analysis pending.")
             },
-            "plan": plan
+            "plan": plan,
+            "execution": execution_result
         }
 
     def _fetch_recent_errors(self, query_term: str) -> List[Dict[str, Any]]:
-        """
-        Searches 'greenstick-logs' for recent errors.
-        """
         if not self.es_client:
             return []
             
         try:
-            # Simple match query for errors
             response = self.es_client.search(index="greenstick-logs", body={
                 "query": {
                     "bool": {
@@ -90,10 +102,6 @@ class GreenStickAgent:
             return []
 
     def _search_history(self, error_message: str) -> List[Dict[str, Any]]:
-        """
-        Searches 'greenstick-incidents' for similar past issues.
-        Currently using BM25 (text match). Vector search to be added.
-        """
         if not self.es_client:
             return []
 
@@ -115,35 +123,98 @@ class GreenStickAgent:
             return []
 
     def _correlate_events(self, incident_id: str) -> List[Dict[str, Any]]:
-        """
-        Mock ES|QL correlation. 
-        Real implementation would use es_client.esql.query(...)
-        """
-        # Placeholder for ES|QL logic
-        return [
-            {"service": "checkout-service", "metric": "cpu_usage", "status": "critical"},
-            {"service": "postgres-db", "metric": "active_connections", "status": "maxed_out"}
-        ]
+        if not self.es_client:
+            return []
 
-    def _generate_plan(self, incident: List[Dict[str, Any]], history: List[Dict[str, Any]], correlations: List[Dict[str, Any]]) -> Dict[str, Any]:
+        query = """
+        FROM "greenstick-logs"
+        | STATS count = count(*) BY service, level
+        | SORT count DESC
+        | LIMIT 10
         """
-        Constructs a remediation plan based on the inputs.
+        
+        try:
+            if hasattr(self.es_client, 'esql'):
+                resp = self.es_client.esql.query(query=query)
+                columns = [col['name'] for col in resp['columns']]
+                results = []
+                for row in resp['values']:
+                    results.append(dict(zip(columns, row)))
+                return results
+            else:
+                return [{"service": "checkout-service", "level": "ERROR", "count": 2}]
+        except Exception as e:
+            print(f"ES|QL Query failed: {e}")
+            return []
+
+    async def _generate_plan(self, incident: List[Dict[str, Any]], history: List[Dict[str, Any]], correlations: List[Dict[str, Any]]) -> Dict[str, Any]:
+        if not self.model:
+             return {
+                "action": "MANUAL_INVESTIGATION",
+                "confidence": 0.0,
+                "reasoning": "Gemini API key not configured.",
+                "steps": ["Check backend configuration"]
+            }
+
+        prompt = f"""
+        You are a Site Reliability Engineer Agent.
+        
+        Context:
+        1. Current Anomalies: {json.dumps(incident)}
+        2. Historical Incidents: {json.dumps(history)}
+        3. Correlations: {json.dumps(correlations)}
+        
+        Task:
+        Analyze the situation and recommend a remediation plan.
+        
+        Output JSON format:
+        {{
+            "action": "ROLLBACK" | "SCALE_UP" | "RESTART_SERVICE" | "CREATE_TICKET" | "MANUAL_INVESTIGATION",
+            "confidence": 0.0-1.0,
+            "reasoning": "Brief explanation",
+            "steps": ["step 1", "step 2"]
+        }}
         """
-        # Simple heuristic based on historical match
-        if history:
-            top_match = history[0]
+        
+        try:
+            response = self.model.generate_content(prompt)
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text[7:-3]
+            elif text.startswith("```"):
+                text = text[3:-3]
+            return json.loads(text)
+        except Exception as e:
+            print(f"Gemini generation failed: {e}")
             return {
-                "action": "AUTOMATED_REMEDIATION",
-                "confidence": 0.92,
-                "steps": [
-                    f"Identified similar incident: {top_match.get('incident_id')}",
-                    f"Suggested resolution: {top_match.get('resolution')}",
-                    "Applying config change to connection pool..."
-                ]
+                "action": "ERROR_GENERATING_PLAN",
+                "confidence": 0.0,
+                "reasoning": f"LLM Error: {str(e)}",
+                "steps": ["Manual intervention required"]
+            }
+
+    async def _execute_action(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Executes the recommended action.
+        For now, this is a mock executor that logs the action.
+        """
+        action = plan.get("action", "UNKNOWN")
+        confidence = plan.get("confidence", 0.0)
+        
+        # Require human approval for low confidence or destructive actions
+        requires_approval = confidence < 0.8 or action in ["ROLLBACK", "RESTART_SERVICE"]
+        
+        if requires_approval:
+            return {
+                "status": "PENDING_APPROVAL",
+                "message": f"Action '{action}' requires human approval (confidence: {confidence:.2f})",
+                "approval_required": True
             }
         
+        # Mock execution
         return {
-            "action": "MANUAL_INVESTIGATION",
-            "confidence": 0.45,
-            "steps": ["Escalate to on-call engineer", "Check dashboard for metrics"]
+            "status": "EXECUTED",
+            "message": f"Action '{action}' executed successfully.",
+            "approval_required": False,
+            "timestamp": datetime.now().isoformat()
         }

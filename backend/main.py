@@ -10,16 +10,15 @@ load_dotenv()
 app = FastAPI(title="GreenStick Backend", version="0.1.0")
 
 # Initialize Agent
-# In production, we might want to initialize this lazily or with a dependency injector
 agent = GreenStickAgent(
     es_cloud_id=os.getenv("ELASTIC_CLOUD_ID"),
     es_api_key=os.getenv("ELASTIC_API_KEY"),
     es_endpoint=os.getenv("ELASTIC_ENDPOINT"),
-    openai_api_key=os.getenv("OPENAI_API_KEY")
+    gemini_api_key=os.getenv("GEMINI_API_KEY")
 )
 
 class IncidentQuery(BaseModel):
-    query: string
+    query: str
     filters: Optional[Dict[str, Any]] = None
 
 @app.get("/")
