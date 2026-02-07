@@ -2,14 +2,20 @@ from typing import Dict, Any, List, Optional
 from elasticsearch import Elasticsearch
 
 class GreenStickAgent:
-    def __init__(self, es_cloud_id: Optional[str], es_api_key: Optional[str], openai_api_key: Optional[str]):
+    def __init__(self, es_cloud_id: Optional[str] = None, es_api_key: Optional[str] = None, openai_api_key: Optional[str] = None, es_endpoint: Optional[str] = None):
         self.es_client = None
-        if es_cloud_id and es_api_key:
+        if (es_cloud_id or es_endpoint) and es_api_key:
             try:
-                self.es_client = Elasticsearch(
-                    cloud_id=es_cloud_id,
-                    api_key=es_api_key
-                )
+                if es_cloud_id:
+                    self.es_client = Elasticsearch(
+                        cloud_id=es_cloud_id,
+                        api_key=es_api_key
+                    )
+                else:
+                    self.es_client = Elasticsearch(
+                        es_endpoint,
+                        api_key=es_api_key
+                    )
                 print("Connected to Elasticsearch")
             except Exception as e:
                 print(f"Failed to connect to Elasticsearch: {e}")

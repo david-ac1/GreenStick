@@ -14,6 +14,7 @@ app = FastAPI(title="GreenStick Backend", version="0.1.0")
 agent = GreenStickAgent(
     es_cloud_id=os.getenv("ELASTIC_CLOUD_ID"),
     es_api_key=os.getenv("ELASTIC_API_KEY"),
+    es_endpoint=os.getenv("ELASTIC_ENDPOINT"),
     openai_api_key=os.getenv("OPENAI_API_KEY")
 )
 
