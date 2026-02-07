@@ -1,7 +1,77 @@
+'use client';
+
 import Image from "next/image";
 import Link from "next/link";
+import AgentPanel from "@/components/AgentPanel";
+import { useDashboardData, Incident } from "@/hooks/useDashboardData";
+
+function StatCard({ label, value, change, trend }: { label: string; value: string | number; change?: string; trend?: 'up' | 'down' | 'stable' }) {
+  const trendColor = trend === 'up' ? 'text-rose-600' : trend === 'down' ? 'text-emerald-600' : 'text-slate-400';
+
+  return (
+    <div className="bg-white border-b-2 border-b-black p-4 shadow-md">
+      <div className="flex justify-between items-start mb-2">
+        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{label}</span>
+        {change && <span className={`${trendColor} text-[10px] font-bold font-mono`}>{change}</span>}
+      </div>
+      <div className="flex items-end gap-3">
+        <span className="text-3xl font-bold font-mono leading-none tracking-tighter text-black">{value}</span>
+      </div>
+    </div>
+  );
+}
+
+function IncidentRow({ incident, onSelect }: { incident: Incident; onSelect: (id: string) => void }) {
+  const levelColors: Record<string, string> = {
+    'ERROR': 'text-rose-600',
+    'WARN': 'text-amber-600',
+    'INFO': 'text-slate-400',
+  };
+
+  const statusColors: Record<string, string> = {
+    'ERROR': 'bg-rose-500 text-white border-rose-600',
+    'WARN': 'bg-amber-500 text-black border-amber-600',
+    'INFO': 'bg-emerald-500 text-white border-emerald-600',
+  };
+
+  const formatTime = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString('en-US', { hour12: false });
+    } catch {
+      return timestamp;
+    }
+  };
+
+  return (
+    <tr
+      className="hover:bg-slate-50 transition-colors cursor-pointer group"
+      onClick={() => onSelect(incident.trace_id || incident.id)}
+    >
+      <td className="px-5 py-3">
+        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm ${statusColors[incident.level] || statusColors['INFO']} font-bold uppercase tracking-tighter border`}>
+          {incident.level === 'ERROR' ? 'Active' : incident.level === 'WARN' ? 'Pending' : 'Info'}
+        </span>
+      </td>
+      <td className={`px-5 py-3 font-bold ${levelColors[incident.level] || 'text-slate-400'}`}>
+        {incident.level}
+      </td>
+      <td className="px-5 py-3 text-black font-semibold font-mono">{incident.trace_id || incident.id.slice(0, 8)}</td>
+      <td className="px-5 py-3 text-slate-700 truncate max-w-md">{incident.message}</td>
+      <td className="px-5 py-3">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-sm text-black">smart_toy</span>
+          <span className="font-semibold text-black">AGENT</span>
+        </div>
+      </td>
+      <td className="px-5 py-3 text-slate-500 whitespace-nowrap font-mono">{formatTime(incident.timestamp)}</td>
+    </tr>
+  );
+}
 
 export default function Dashboard() {
+  const { stats, incidents, loading, refresh } = useDashboardData();
+
   return (
     <div className="flex h-screen bg-[var(--metallic-bg)] text-[var(--obsidian)] overflow-hidden font-sans">
       {/* Sidebar */}
@@ -11,7 +81,7 @@ export default function Dashboard() {
             <div className="size-8 bg-white/10 rounded flex items-center justify-center text-white shrink-0">
               <span className="material-symbols-outlined text-sm">terminal</span>
             </div>
-            <span className="font-bold text-sm tracking-tight whitespace-nowrap text-white">COMMAND CENTER</span>
+            <span className="font-bold text-sm tracking-tight whitespace-nowrap text-white">GREENSTICK</span>
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto py-6 space-y-1">
@@ -22,31 +92,9 @@ export default function Dashboard() {
             <span className="material-symbols-outlined text-xl">dashboard</span>
             <span className="text-xs font-semibold">Overview</span>
           </Link>
-          <div className="space-y-1">
-            <button className="w-full flex items-center justify-between px-4 py-2.5 text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-xl">warning</span>
-                <span className="text-xs font-medium">Incidents</span>
-              </div>
-              <span className="material-symbols-outlined text-sm">expand_more</span>
-            </button>
-            <div className="pl-12 space-y-1">
-              <Link className="block py-1.5 text-[11px] text-slate-500 hover:text-white" href="/incident/active">Active Queue</Link>
-              <Link className="block py-1.5 text-[11px] text-slate-500 hover:text-white" href="/incident/archive">Historical Archive</Link>
-              <Link className="block py-1.5 text-[11px] text-slate-500 hover:text-white" href="/incident/post-mortems">Post-Mortems</Link>
-            </div>
-          </div>
-          <Link className="flex items-center gap-3 px-4 py-2.5 text-slate-400 hover:text-white hover:bg-white/5 transition-colors group" href="/anomalies">
-            <span className="material-symbols-outlined text-xl">analytics</span>
-            <span className="text-xs font-medium">Anomalies</span>
-          </Link>
           <Link className="flex items-center gap-3 px-4 py-2.5 text-slate-400 hover:text-white hover:bg-white/5 transition-colors group" href="/audit">
             <span className="material-symbols-outlined text-xl">shield</span>
-            <span className="text-xs font-medium">Security Audit</span>
-          </Link>
-          <Link className="flex items-center gap-3 px-4 py-2.5 text-slate-400 hover:text-white hover:bg-white/5 transition-colors group" href="/settings">
-            <span className="material-symbols-outlined text-xl">settings</span>
-            <span className="text-xs font-medium">System Config</span>
+            <span className="text-xs font-medium">Audit Log</span>
           </Link>
         </nav>
         <div className="p-4 border-t border-white/10">
@@ -60,10 +108,9 @@ export default function Dashboard() {
               />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-bold text-white truncate uppercase tracking-tighter">ARIVERA_SRE</p>
-              <p className="text-[9px] text-slate-500 truncate font-mono">LVL_04_ROOT</p>
+              <p className="text-[11px] font-bold text-white truncate uppercase tracking-tighter">SRE_ADMIN</p>
+              <p className="text-[9px] text-slate-500 truncate font-mono">ROOT_ACCESS</p>
             </div>
-            <span className="material-symbols-outlined text-slate-500 text-sm cursor-pointer hover:text-white">logout</span>
           </div>
         </div>
       </aside>
@@ -73,115 +120,51 @@ export default function Dashboard() {
         <header className="h-14 bg-[var(--metallic-surface)] border-b border-slate-300 flex items-center justify-between px-6 z-10">
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-3">
-              <div className="flex items-end gap-[2px] h-4">
-                <div className="w-[3px] bg-emerald-500 rounded-[1px] h-2"></div>
-                <div className="w-[3px] bg-emerald-500 rounded-[1px] h-3"></div>
-                <div className="w-[3px] bg-emerald-500 rounded-[1px] h-1"></div>
-                <div className="w-[3px] bg-emerald-500 rounded-[1px] h-4"></div>
-                <div className="w-[3px] bg-emerald-500 rounded-[1px] h-2"></div>
-                <div className="w-[3px] bg-emerald-500 rounded-[1px] h-3"></div>
-                <div className="w-[3px] bg-emerald-500 rounded-[1px] h-2"></div>
-                <div className="w-[3px] bg-emerald-500 rounded-[1px] h-4"></div>
-                <div className="w-[3px] bg-emerald-500 rounded-[1px] h-1"></div>
-              </div>
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Status: <span className="text-black bg-emerald-400 px-2 py-0.5 rounded-sm">STABLE</span></span>
-            </div>
-            <div className="relative w-96">
-              <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-base">search</span>
-              <input className="w-full pl-8 pr-4 py-1.5 bg-white/50 border border-slate-300 rounded-sm text-xs focus:ring-1 focus:ring-black focus:border-black transition-all font-mono" placeholder="grep --trace-id '942-fca' /var/log/..." type="text" />
+              <span className={`size-2 rounded-full ${loading ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                Status: <span className={`${loading ? 'text-amber-600' : 'text-black'} bg-${loading ? 'amber' : 'emerald'}-400 px-2 py-0.5 rounded-sm`}>
+                  {loading ? 'LOADING' : 'LIVE'}
+                </span>
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-3 py-1 bg-white border border-slate-300 rounded-sm">
-              <span className="size-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-              <span className="text-[10px] font-bold text-black font-mono uppercase tracking-tight">NODE: US-EAST-1</span>
-            </div>
-            <button className="bg-black text-white text-[10px] font-bold px-4 py-2 rounded-sm hover:bg-slate-800 transition-colors flex items-center gap-2 uppercase tracking-widest border border-black shadow-lg">
-              <span className="material-symbols-outlined text-sm">add</span>
-              Create Incident
+            <button
+              onClick={refresh}
+              className="bg-black text-white text-[10px] font-bold px-4 py-2 rounded-sm hover:bg-slate-800 transition-colors flex items-center gap-2 uppercase tracking-widest"
+            >
+              <span className="material-symbols-outlined text-sm">refresh</span>
+              Refresh
             </button>
           </div>
         </header>
 
         <div className="flex-1 overflow-hidden flex bg-[var(--metallic-bg)]">
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* Stats Grid */}
             <div className="grid grid-cols-4 gap-4">
-              {/* Stat Cards */}
-              <div className="bg-white border-b-2 border-b-black p-4 shadow-md">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Incidents</span>
-                  <span className="text-rose-600 text-[10px] font-bold font-mono">+12.4%</span>
-                </div>
-                <div className="flex items-end gap-3">
-                  <span className="text-3xl font-bold font-mono leading-none tracking-tighter text-black">08</span>
-                  <div className="flex items-end gap-[1px] h-6 flex-1 mb-1">
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-2"></div>
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-4"></div>
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-3"></div>
-                    <div className="flex-1 bg-rose-500 min-h-[2px] h-6"></div>
-                    <div className="flex-1 bg-rose-400 min-h-[2px] h-5"></div>
-                    <div className="flex-1 bg-rose-400 min-h-[2px] h-4"></div>
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-3"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white border-b-2 border-b-black p-4 shadow-md">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Anomaly Flux</span>
-                  <span className="text-emerald-600 text-[10px] font-bold font-mono">-4.2%</span>
-                </div>
-                <div className="flex items-end gap-3">
-                  <span className="text-3xl font-bold font-mono leading-none tracking-tighter text-black">142</span>
-                  <div className="flex items-end gap-[1px] h-6 flex-1 mb-1">
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-4"></div>
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-5"></div>
-                    <div className="flex-1 bg-emerald-500 min-h-[2px] h-6"></div>
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-4"></div>
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-3"></div>
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-2"></div>
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-1"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white border-b-2 border-b-black p-4 shadow-md">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">MTTR Avg</span>
-                  <span className="text-slate-400 text-[10px] font-bold font-mono">STABLE</span>
-                </div>
-                <div className="flex items-end gap-3">
-                  <span className="text-3xl font-bold font-mono leading-none tracking-tighter text-black">15<span className="text-sm font-normal text-slate-400 tracking-tighter ml-0.5">m</span></span>
-                  <div className="flex items-end gap-[1px] h-6 flex-1 mb-1">
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-3"></div>
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-3"></div>
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-4"></div>
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-4"></div>
-                    <div className="flex-1 bg-slate-900 min-h-[2px] h-4"></div>
-                    <div className="flex-1 bg-slate-900 min-h-[2px] h-4"></div>
-                    <div className="flex-1 bg-slate-300 min-h-[2px] h-4"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white border-b-2 border-b-black p-4 shadow-md">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Agent Accuracy</span>
-                  <span className="text-emerald-600 text-[10px] font-bold font-mono">+0.8%</span>
-                </div>
-                <div className="flex items-end gap-3">
-                  <span className="text-3xl font-bold font-mono leading-none tracking-tighter text-black">99.8%</span>
-                  <div className="flex items-end gap-[1px] h-6 flex-1 mb-1">
-                    <div className="flex-1 bg-emerald-400 min-h-[2px] h-6"></div>
-                    <div className="flex-1 bg-emerald-400 min-h-[2px] h-6"></div>
-                    <div className="flex-1 bg-emerald-500 min-h-[2px] h-5"></div>
-                    <div className="flex-1 bg-emerald-600 min-h-[2px] h-6"></div>
-                    <div className="flex-1 bg-emerald-500 min-h-[2px] h-6"></div>
-                    <div className="flex-1 bg-emerald-400 min-h-[2px] h-6"></div>
-                    <div className="flex-1 bg-emerald-400 min-h-[2px] h-6"></div>
-                  </div>
-                </div>
-              </div>
+              <StatCard
+                label="Active Incidents"
+                value={stats?.active_incidents ?? '-'}
+                change={stats ? `${stats.active_incidents} errors` : undefined}
+                trend="up"
+              />
+              <StatCard
+                label="Total Logs"
+                value={stats?.anomaly_flux ?? '-'}
+                trend="stable"
+              />
+              <StatCard
+                label="Historical Incidents"
+                value={stats?.historical_incidents ?? '-'}
+                trend="stable"
+              />
+              <StatCard
+                label="Agent Accuracy"
+                value={stats ? `${stats.agent_accuracy}%` : '-'}
+                change="+0.8%"
+                trend="down"
+              />
             </div>
 
             {/* Incident Stream */}
@@ -190,158 +173,46 @@ export default function Dashboard() {
                 <div className="flex items-center gap-4">
                   <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-black">Incident Stream</h3>
                   <div className="h-4 w-px bg-slate-300"></div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-medium text-slate-500 font-mono">Showing 24 of 1,284 entries</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold border border-slate-300 hover:bg-slate-50 transition-colors uppercase">
-                    <span className="material-symbols-outlined text-sm">filter_alt</span> Filter
-                  </button>
-                  <button className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold border border-slate-300 hover:bg-slate-50 transition-colors uppercase">
-                    <span className="material-symbols-outlined text-sm">download</span> Export
-                  </button>
-                  <button className="bg-black p-1 text-white">
-                    <span className="material-symbols-outlined text-sm">more_vert</span>
-                  </button>
+                  <span className="text-[10px] font-medium text-slate-500 font-mono">
+                    Showing {incidents?.incidents.length || 0} of {incidents?.total || 0} entries
+                  </span>
                 </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50">
-                      <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap border-b-2 border-black">
-                        Status <span className="material-symbols-outlined text-[12px] align-middle ml-1">swap_vert</span>
-                      </th>
-                      <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap border-b-2 border-black">
-                        Severity <span className="material-symbols-outlined text-[12px] align-middle ml-1">swap_vert</span>
-                      </th>
-                      <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap border-b-2 border-black">
-                        Record ID <span className="material-symbols-outlined text-[12px] align-middle ml-1">swap_vert</span>
-                      </th>
-                      <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap w-full border-b-2 border-black">
-                        Event Message
-                      </th>
-                      <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap border-b-2 border-black">
-                        Assigned Agent
-                      </th>
-                      <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap border-b-2 border-black">
-                        ISO_8601
-                      </th>
+                      <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap border-b-2 border-black">Status</th>
+                      <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap border-b-2 border-black">Severity</th>
+                      <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap border-b-2 border-black">Trace ID</th>
+                      <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap w-full border-b-2 border-black">Message</th>
+                      <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap border-b-2 border-black">Agent</th>
+                      <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap border-b-2 border-black">Timestamp</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
-                    <tr className="hover:bg-slate-50 transition-colors cursor-pointer group">
-                      <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm bg-rose-500 text-white font-bold uppercase tracking-tighter border border-rose-600">
-                          Active
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 font-bold text-rose-600">CRITICAL</td>
-                      <td className="px-5 py-3 text-black font-semibold">#IR-402</td>
-                      <td className="px-5 py-3 text-slate-700 truncate max-w-md">LATENCY_SPIKE_DETECTED (850ms) us-east-1-api-cluster</td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-sm text-black">smart_toy</span>
-                          <span className="font-semibold text-black">DELTA_01</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-slate-500 whitespace-nowrap">14:02:11.452</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50 transition-colors cursor-pointer group">
-                      <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm bg-amber-500 text-black font-bold uppercase tracking-tighter border border-amber-600">
-                          Pending
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 font-bold text-amber-600">WARNING</td>
-                      <td className="px-5 py-3 text-black font-semibold">#IR-398</td>
-                      <td className="px-5 py-3 text-slate-700 truncate max-w-md">DB_POOL_EXHAUSTION (88%) shard-04-primary</td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-sm text-black">person</span>
-                          <span className="font-semibold text-black">HUMAN_OPS</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-slate-500 whitespace-nowrap">13:58:02.110</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50 transition-colors cursor-pointer group">
-                      <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm bg-emerald-500 text-white font-bold uppercase tracking-tighter border border-emerald-600">
-                          Resolved
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 font-bold text-slate-400">LOW_PRIO</td>
-                      <td className="px-5 py-3 text-black font-semibold">#IR-395</td>
-                      <td className="px-5 py-3 text-slate-700 truncate max-w-md">S3_POLICY_REMEDIATION sandbox-env-audit</td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-sm text-black">smart_toy</span>
-                          <span className="font-semibold text-black">SIGMA_09</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-slate-500 whitespace-nowrap">13:45:55.901</td>
-                    </tr>
+                    {incidents?.incidents.map((incident) => (
+                      <IncidentRow
+                        key={incident.id}
+                        incident={incident}
+                        onSelect={(id) => console.log('Selected:', id)}
+                      />
+                    ))}
+                    {(!incidents || incidents.incidents.length === 0) && (
+                      <tr>
+                        <td colSpan={6} className="px-5 py-8 text-center text-slate-400">
+                          {loading ? 'Loading incidents...' : 'No incidents found'}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
-              </div>
-              <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex justify-between items-center">
-                <div className="flex gap-1">
-                  <button className="px-3 py-1 bg-white border border-slate-300 rounded-sm text-[10px] font-bold hover:bg-black hover:text-white transition-all uppercase">Prev</button>
-                  <button className="px-3 py-1 bg-black text-white border border-black rounded-sm text-[10px] font-bold uppercase">1</button>
-                  <button className="px-3 py-1 bg-white border border-slate-300 rounded-sm text-[10px] font-bold hover:bg-slate-100 uppercase">2</button>
-                  <button className="px-3 py-1 bg-white border border-slate-300 rounded-sm text-[10px] font-bold hover:bg-black hover:text-white transition-all uppercase">Next</button>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-[10px] font-bold text-slate-500 font-mono">JUMP TO PAGE</span>
-                  <input className="w-12 h-6 text-[10px] font-mono border-slate-300 p-1 text-center" type="text" defaultValue="1" />
-                </div>
               </div>
             </div>
           </div>
 
-          <aside className="w-80 bg-white border-l border-slate-300 flex flex-col flex-shrink-0">
-            <div className="p-4 border-b-2 border-black flex items-center justify-between">
-              <h3 className="text-[11px] font-bold uppercase tracking-widest text-black">Agent Activity</h3>
-              <span className="text-[9px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded-sm">LIVE</span>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
-              <div className="relative pl-6 pb-2 border-l-2 border-emerald-500">
-                <div className="absolute -left-[5px] top-0 size-2.5 rounded-full bg-emerald-500 border-2 border-white"></div>
-                <p className="text-[9px] font-bold text-slate-400 mb-1 font-mono">14:05:12.822</p>
-                <div className="bg-slate-50 border border-slate-200 p-3 rounded-sm shadow-sm">
-                  <p className="text-[11px] font-semibold text-black leading-tight">Agent-Delta-01 initialized trace analysis on #IR-402</p>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    <span className="px-1.5 py-0.5 bg-black text-white rounded-[1px] text-[8px] font-bold tracking-tight">ANALYZING</span>
-                    <span className="px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded-[1px] text-[8px] font-bold tracking-tight">K8S_CTX</span>
-                  </div>
-                </div>
-              </div>
-              <div className="relative pl-6 pb-2 border-l-2 border-slate-200">
-                <div className="absolute -left-[5px] top-0 size-2.5 rounded-full bg-slate-300 border-2 border-white"></div>
-                <p className="text-[9px] font-bold text-slate-400 mb-1 font-mono">14:04:45.109</p>
-                <div className="bg-white border border-slate-100 p-3 rounded-sm opacity-60">
-                  <p className="text-[11px] font-medium text-slate-600 leading-tight">Agent-Sigma-09 completed task 842: S3_FIX</p>
-                </div>
-              </div>
-              <div className="relative pl-6 pb-2 border-l-2 border-rose-500">
-                <div className="absolute -left-[5px] top-0 size-2.5 rounded-full bg-rose-500 border-2 border-white"></div>
-                <p className="text-[9px] font-bold text-slate-400 mb-1 font-mono">14:02:11.452</p>
-                <div className="bg-rose-50 border border-rose-100 p-3 rounded-sm">
-                  <p className="text-[11px] font-bold text-rose-900 leading-tight">CRITICAL: API_LATENCY &gt; 800ms</p>
-                  <p className="text-[10px] text-rose-700 mt-1 font-mono">src: control-loop-primary</p>
-                </div>
-              </div>
-            </div>
-            <div className="p-4 bg-black border-t border-black">
-              <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 tracking-widest">
-                <span>CONNECTION: SECURE</span>
-                <div className="flex gap-1 items-center">
-                  <span className="text-emerald-500">200 OK</span>
-                  <span className="size-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
-                </div>
-              </div>
-            </div>
+          <aside className="w-96 border-l border-slate-300 flex flex-col flex-shrink-0 overflow-y-auto">
+            <AgentPanel />
           </aside>
         </div>
       </main>
