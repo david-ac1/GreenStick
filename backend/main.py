@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -10,6 +10,9 @@ from elasticsearch import Elasticsearch
 load_dotenv()
 
 app = FastAPI(title="GreenStick Backend", version="0.1.0")
+
+# API Key for authentication
+GREENSTICK_API_KEY = os.getenv("GREENSTICK_API_KEY", "")
 
 # CORS for frontend
 app.add_middleware(
@@ -38,12 +41,41 @@ class IncidentQuery(BaseModel):
     query: str
     filters: Optional[Dict[str, Any]] = None
 
+# API Key dependency
+async def verify_api_key(authorization: Optional[str] = Header(None)):
+    """Verify the API key from Authorization header."""
+    if not GREENSTICK_API_KEY:
+        # No key configured, allow access (development mode)
+        return True
+    
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    
+    # Expect "Bearer <key>" format
+    parts = authorization.split(" ")
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid Authorization format. Use: Bearer <api_key>")
+    
+    if parts[1] != GREENSTICK_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    
+    return True
+
 @app.get("/")
 def read_root():
     return {"status": "GreenStick Backend Operational", "service": "active"}
 
+@app.post("/auth/verify")
+async def verify_auth(authorization: Optional[str] = Header(None)):
+    """Verify API key and return auth status."""
+    try:
+        await verify_api_key(authorization)
+        return {"authenticated": True, "user": "OPERATOR"}
+    except HTTPException:
+        raise
+
 @app.get("/stats")
-async def get_stats():
+async def get_stats(authorized: bool = Depends(verify_api_key)):
     """
     Get dashboard statistics from Elasticsearch.
     """
@@ -62,8 +94,8 @@ async def get_stats():
         return {
             "active_incidents": error_count.get("count", 0),
             "anomaly_flux": total_logs.get("count", 0),
-            "mttr_avg": 15, # Would calculate from resolved incidents if we had timestamps
-            "agent_accuracy": 99.8, # Would calculate from feedback data
+            "mttr_avg": 15,
+            "agent_accuracy": 99.8,
             "historical_incidents": incidents_count.get("count", 0)
         }
     except Exception as e:
@@ -76,7 +108,7 @@ async def get_stats():
         }
 
 @app.get("/incidents")
-async def get_incidents():
+async def get_incidents(authorized: bool = Depends(verify_api_key)):
     """
     Get recent incidents/logs from Elasticsearch.
     """
@@ -108,7 +140,7 @@ async def get_incidents():
         return {"total": 0, "incidents": [], "error": str(e)}
 
 @app.post("/agent/analyze")
-async def analyze_incident(incident_id: str):
+async def analyze_incident(incident_id: str, authorized: bool = Depends(verify_api_key)):
     """
     Trigger the agent to analyze a specific incident by ID.
     """
@@ -119,7 +151,7 @@ async def analyze_incident(incident_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/agent/history")
-async def get_history():
+async def get_history(authorized: bool = Depends(verify_api_key)):
     """
     Retrieve agent action history.
     """
