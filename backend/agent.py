@@ -19,7 +19,7 @@ class GreenStickAgent:
                     )
                 else:
                     self.es_client = Elasticsearch(
-                        es_endpoint,
+                        hosts=[es_endpoint],
                         api_key=es_api_key
                     )
                 print("Connected to Elasticsearch")

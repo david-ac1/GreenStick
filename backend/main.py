@@ -3,11 +3,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from .agent import GreenStickAgent
 from elasticsearch import Elasticsearch
 
-load_dotenv()
+# Load .env from the backend directory
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
+
+# Debug: Print loaded values
+print(f"ELASTIC_ENDPOINT: {os.getenv('ELASTIC_ENDPOINT', 'NOT SET')[:30]}...")
+print(f"ELASTIC_API_KEY: {'SET' if os.getenv('ELASTIC_API_KEY') else 'NOT SET'}")
 
 app = FastAPI(title="GreenStick Backend", version="0.1.0")
 
@@ -24,10 +31,17 @@ app.add_middleware(
 )
 
 # Initialize Elasticsearch client
-es_client = Elasticsearch(
-    os.getenv("ELASTIC_ENDPOINT"),
-    api_key=os.getenv("ELASTIC_API_KEY")
-)
+es_endpoint = os.getenv("ELASTIC_ENDPOINT")
+es_api_key = os.getenv("ELASTIC_API_KEY")
+
+if es_endpoint and es_api_key:
+    es_client = Elasticsearch(
+        hosts=[es_endpoint],
+        api_key=es_api_key
+    )
+else:
+    es_client = None
+    print("Warning: Elasticsearch not configured")
 
 # Initialize Agent
 agent = GreenStickAgent(
@@ -156,3 +170,43 @@ async def get_history(authorized: bool = Depends(verify_api_key)):
     Retrieve agent action history.
     """
     return {"history": []}
+
+class NewIncident(BaseModel):
+    service: str
+    level: str = "ERROR"
+    message: str
+    trace_id: Optional[str] = None
+
+@app.post("/incidents")
+async def report_incident(incident: NewIncident, authorized: bool = Depends(verify_api_key)):
+    """
+    Report a new incident/log entry.
+    """
+    if not es_client:
+        raise HTTPException(status_code=503, detail="Elasticsearch not configured")
+    
+    try:
+        from datetime import datetime
+        import random
+        
+        trace_id = incident.trace_id or f"trace-{random.choice(['hq', 'us', 'eu'])}-{random.randint(100, 999)}"
+        
+        doc = {
+            "@timestamp": datetime.utcnow().isoformat() + "Z",
+            "service": incident.service,
+            "level": incident.level,
+            "message": incident.message,
+            "trace_id": trace_id
+        }
+        
+        result = es_client.index(index="greenstick-logs", document=doc, refresh=True)
+        
+        return {
+            "success": True,
+            "id": result["_id"],
+            "trace_id": trace_id,
+            "message": f"Incident reported for {incident.service}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

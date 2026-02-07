@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import Image from "next/image";
 import Link from "next/link";
 import AgentPanel from "@/components/AgentPanel";
 import AuthGate from "@/components/AuthGate";
+import ReportIncidentModal from "@/components/ReportIncidentModal";
 import { useDashboardData, Incident } from "@/hooks/useDashboardData";
 import { useAuth } from "@/context/AuthContext";
 
@@ -74,9 +76,15 @@ function IncidentRow({ incident, onSelect }: { incident: Incident; onSelect: (id
 export default function Dashboard() {
   const { stats, incidents, loading, refresh } = useDashboardData();
   const { user, logout } = useAuth();
+  const [showReportModal, setShowReportModal] = useState(false);
 
   return (
     <AuthGate>
+      <ReportIncidentModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        onSuccess={refresh}
+      />
       <div className="flex h-screen bg-[var(--metallic-bg)] text-[var(--obsidian)] overflow-hidden font-sans">
         {/* Sidebar */}
         <aside className="w-64 bg-black flex flex-col transition-all duration-300 flex-shrink-0 z-20">
@@ -136,6 +144,13 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              <button
+                onClick={() => setShowReportModal(true)}
+                className="bg-rose-500 text-white text-[10px] font-bold px-4 py-2 rounded-sm hover:bg-rose-600 transition-colors flex items-center gap-2 uppercase tracking-widest"
+              >
+                <span className="material-symbols-outlined text-sm">add_alert</span>
+                Report Incident
+              </button>
               <button
                 onClick={refresh}
                 className="bg-black text-white text-[10px] font-bold px-4 py-2 rounded-sm hover:bg-slate-800 transition-colors flex items-center gap-2 uppercase tracking-widest"
