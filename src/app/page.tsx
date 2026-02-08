@@ -127,6 +127,10 @@ export default function Dashboard() {
               <span className="material-symbols-outlined text-xl">dashboard</span>
               <span className="text-xs font-semibold">Overview</span>
             </Link>
+            <Link className="flex items-center gap-3 px-4 py-2.5 text-slate-400 hover:text-white hover:bg-white/5 transition-colors group" href="/esql">
+              <span className="material-symbols-outlined text-xl">query_stats</span>
+              <span className="text-xs font-medium">ES|QL Analytics</span>
+            </Link>
             <Link className="flex items-center gap-3 px-4 py-2.5 text-slate-400 hover:text-white hover:bg-white/5 transition-colors group" href="/audit">
               <span className="material-symbols-outlined text-xl">shield</span>
               <span className="text-xs font-medium">Audit Log</span>

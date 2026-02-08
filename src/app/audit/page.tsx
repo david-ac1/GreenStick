@@ -123,6 +123,9 @@ export default function AuditPage() {
                                 <Link href="/" className="text-zinc-500 hover:text-white text-[11px] font-bold uppercase tracking-widest transition-colors">
                                     Dashboard
                                 </Link>
+                                <Link href="/esql" className="text-zinc-500 hover:text-white text-[11px] font-bold uppercase tracking-widest transition-colors">
+                                    ES|QL Analytics
+                                </Link>
                                 <span className="text-white text-[11px] font-bold uppercase tracking-widest border-b border-white pb-1">
                                     Audit Log
                                 </span>
