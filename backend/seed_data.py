@@ -165,6 +165,70 @@ def seed_incidents():
     
     print(f"Seeded {len(incidents)} historical incidents")
 
+def seed_audit_logs():
+    """Create the audit index with sample agent actions."""
+    print("Creating greenstick-audit index...")
+    
+    if not es.indices.exists(index="greenstick-audit"):
+        es.indices.create(index="greenstick-audit", body={
+            "mappings": {
+                "properties": {
+                    "@timestamp": {"type": "date"},
+                    "trace_id": {"type": "keyword"},
+                    "action_type": {"type": "keyword"},
+                    "description": {"type": "text"},
+                    "confidence": {"type": "float"},
+                    "status": {"type": "keyword"},
+                    "metadata": {"type": "object", "enabled": True}
+                }
+            }
+        })
+    
+    # Sample audit entries representing agent actions
+    ACTION_TYPES = ["K8S_RESTART", "CONFIG_ROLLBACK", "SCALE_UP", "ALERT_ESCALATE", "ANALYSIS"]
+    STATUSES = ["approved", "pending", "rejected"]
+    
+    DESCRIPTIONS = [
+        "Memory leak detected in auth-svc-v2. Entropy delta exceeded 0.85 threshold. Pod termination initiated for heap clearance.",
+        "Analyzed high latency spike in api-gateway. Root cause identified as database connection pool exhaustion.",
+        "Kafka consumer lag detected. Scaled consumer group from 3 to 6 replicas to handle backpressure.",
+        "SSL certificate expiry warning. Escalated to on-call team for manual renewal.",
+        "Redis cluster node failure detected. Initiated automatic failover to replica.",
+        "Correlated 12 related incidents across payment-processor and auth-service. Common root cause: network partition.",
+        "Database connection pool at 95% capacity. Increased pool size from 100 to 200 connections.",
+        "High CPU utilization on user-service pods. No action taken - within normal range for current traffic.",
+        "Configuration drift detected. Rolled back to last known good configuration.",
+        "Scheduled maintenance window started. Suppressing non-critical alerts for 2 hours."
+    ]
+    
+    now = datetime.utcnow()
+    audit_entries = []
+    
+    for i in range(20):
+        timestamp = now - timedelta(hours=random.randint(1, 72))
+        status = random.choices(STATUSES, weights=[0.6, 0.3, 0.1])[0]
+        
+        audit_entries.append({
+            "_index": "greenstick-audit",
+            "_source": {
+                "@timestamp": timestamp.isoformat() + "Z",
+                "trace_id": generate_trace_id(),
+                "action_type": random.choice(ACTION_TYPES),
+                "description": random.choice(DESCRIPTIONS),
+                "confidence": round(random.uniform(0.7, 0.99), 2),
+                "status": status,
+                "metadata": {
+                    "service": random.choice(SERVICES),
+                    "correlations_count": random.randint(0, 5),
+                    "historical_matches": random.randint(0, 10)
+                }
+            }
+        })
+    
+    from elasticsearch.helpers import bulk
+    success, failed = bulk(es, audit_entries)
+    print(f"Seeded {success} audit log entries ({failed} failed)")
+
 if __name__ == "__main__":
     print("=" * 50)
     print("GreenStick Demo Data Seeder")
@@ -172,6 +236,8 @@ if __name__ == "__main__":
     
     seed_logs()
     seed_incidents()
+    seed_audit_logs()
     
     print("\n✅ Demo data seeded successfully!")
-    print("You can now view incidents in the Dashboard.")
+    print("You can now view incidents in the Dashboard and Audit page.")
+

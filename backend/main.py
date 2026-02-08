@@ -210,3 +210,100 @@ async def report_incident(incident: NewIncident, authorized: bool = Depends(veri
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+class AuditLogEntry(BaseModel):
+    trace_id: str
+    action_type: str
+    description: str
+    confidence: float = 0.0
+    status: str = "pending"
+    metadata: Optional[Dict[str, Any]] = None
+
+@app.get("/audit-logs")
+async def get_audit_logs(authorized: bool = Depends(verify_api_key)):
+    """
+    Get agent audit logs from Elasticsearch.
+    """
+    if not es_client:
+        return {"total": 0, "logs": [], "error": "Elasticsearch not configured"}
+    
+    try:
+        # Check if index exists, create if not
+        if not es_client.indices.exists(index="greenstick-audit"):
+            return {"total": 0, "logs": []}
+        
+        response = es_client.search(index="greenstick-audit", body={
+            "query": {"match_all": {}},
+            "size": 50,
+            "sort": [{"@timestamp": {"order": "desc"}}]
+        })
+        
+        hits = response.get("hits", {}).get("hits", [])
+        logs = []
+        for hit in hits:
+            source = hit["_source"]
+            logs.append({
+                "id": hit["_id"],
+                "timestamp": source.get("@timestamp", ""),
+                "trace_id": source.get("trace_id", ""),
+                "action_type": source.get("action_type", "UNKNOWN"),
+                "description": source.get("description", ""),
+                "confidence": source.get("confidence", 0),
+                "status": source.get("status", "pending"),
+                "metadata": source.get("metadata", {})
+            })
+        
+        return {
+            "total": response.get("hits", {}).get("total", {}).get("value", 0),
+            "logs": logs
+        }
+    except Exception as e:
+        return {"total": 0, "logs": [], "error": str(e)}
+
+@app.post("/audit-logs")
+async def create_audit_log(entry: AuditLogEntry, authorized: bool = Depends(verify_api_key)):
+    """
+    Create a new audit log entry.
+    """
+    if not es_client:
+        raise HTTPException(status_code=503, detail="Elasticsearch not configured")
+    
+    try:
+        from datetime import datetime
+        
+        # Create index if not exists
+        if not es_client.indices.exists(index="greenstick-audit"):
+            es_client.indices.create(index="greenstick-audit", body={
+                "mappings": {
+                    "properties": {
+                        "@timestamp": {"type": "date"},
+                        "trace_id": {"type": "keyword"},
+                        "action_type": {"type": "keyword"},
+                        "description": {"type": "text"},
+                        "confidence": {"type": "float"},
+                        "status": {"type": "keyword"},
+                        "metadata": {"type": "object", "enabled": True}
+                    }
+                }
+            })
+        
+        doc = {
+            "@timestamp": datetime.utcnow().isoformat() + "Z",
+            "trace_id": entry.trace_id,
+            "action_type": entry.action_type,
+            "description": entry.description,
+            "confidence": entry.confidence,
+            "status": entry.status,
+            "metadata": entry.metadata or {}
+        }
+        
+        result = es_client.index(index="greenstick-audit", document=doc, refresh=True)
+        
+        return {
+            "success": True,
+            "id": result["_id"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+

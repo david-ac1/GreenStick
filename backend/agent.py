@@ -59,6 +59,18 @@ class GreenStickAgent:
         # 5. Execute Action (if confidence is high enough)
         execution_result = await self._execute_action(plan)
         
+        # 6. Log to Audit Trail
+        self._log_audit_entry(
+            trace_id=incident_id,
+            action_type=plan.get("action", "ANALYSIS"),
+            description=plan.get("reasoning", "Analysis completed"),
+            confidence=plan.get("confidence", 0.0),
+            metadata={
+                "correlations_count": len(correlations) if correlations else 0,
+                "historical_matches": len(history) if history else 0,
+            }
+        )
+        
         return {
             "incident_id": incident_id,
             "timestamp": datetime.now().isoformat(),
@@ -72,6 +84,42 @@ class GreenStickAgent:
             "plan": plan,
             "execution": execution_result
         }
+    
+    def _log_audit_entry(self, trace_id: str, action_type: str, description: str, confidence: float, metadata: dict = None):
+        """Log an action to the audit trail in Elasticsearch."""
+        if not self.es_client:
+            return
+        
+        try:
+            # Create index if not exists
+            if not self.es_client.indices.exists(index="greenstick-audit"):
+                self.es_client.indices.create(index="greenstick-audit", body={
+                    "mappings": {
+                        "properties": {
+                            "@timestamp": {"type": "date"},
+                            "trace_id": {"type": "keyword"},
+                            "action_type": {"type": "keyword"},
+                            "description": {"type": "text"},
+                            "confidence": {"type": "float"},
+                            "status": {"type": "keyword"},
+                            "metadata": {"type": "object", "enabled": True}
+                        }
+                    }
+                })
+            
+            doc = {
+                "@timestamp": datetime.now().isoformat() + "Z",
+                "trace_id": trace_id,
+                "action_type": action_type,
+                "description": description,
+                "confidence": confidence,
+                "status": "pending",
+                "metadata": metadata or {}
+            }
+            
+            self.es_client.index(index="greenstick-audit", document=doc, refresh=True)
+        except Exception as e:
+            print(f"Failed to log audit entry: {e}")
 
     def _fetch_recent_errors(self, query_term: str) -> List[Dict[str, Any]]:
         if not self.es_client:
