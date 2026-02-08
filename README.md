@@ -85,7 +85,52 @@ Log Events → Elasticsearch → Anomaly Scanner → Gemini AI → Remediation P
 
 ---
 
-## 🛠️ Tech Stack
+## � ES|QL-Powered Analytics
+
+GreenStick leverages **Elasticsearch Query Language (ES|QL)** for powerful, real-time analytics — aligning with **Elastic Agent Builder's** tool-based architecture.
+
+### Available ES|QL Tools
+
+| Tool | Description | Endpoint |
+|------|-------------|----------|
+| **Error Trends** | Analyze error patterns over time | `GET /esql/error-trends` |
+| **Service Health** | Real-time health check by service | `GET /esql/service-health` |
+| **Trace Analysis** | Follow requests through services | `GET /esql/trace/{trace_id}` |
+| **Anomaly Detection** | Find services with unusual error rates | `GET /esql/anomalies` |
+| **Tool Execution** | Execute any ES|QL tool dynamically | `POST /esql/execute-tool` |
+
+### Example ES|QL Queries
+
+**Error Trends Analysis:**
+```sql
+FROM "greenstick-logs"
+| WHERE level == "ERROR"
+| STATS error_count = COUNT(*) BY DATE_TRUNC(1 hour, @timestamp)
+| SORT @timestamp DESC
+```
+
+**Service Health Check:**
+```sql
+FROM "greenstick-logs"
+| WHERE @timestamp > NOW() - 1 hour
+| STATS total = COUNT(*), errors = COUNT(*) WHERE level == "ERROR" BY service
+| EVAL error_rate = ROUND(errors * 100.0 / total, 2)
+| SORT error_rate DESC
+```
+
+**Anomaly Detection:**
+```sql
+FROM "greenstick-logs"
+| WHERE @timestamp > NOW() - 15 minutes
+| STATS error_count = COUNT(*) WHERE level == "ERROR" BY service
+| WHERE error_count > 0
+| EVAL error_rate = ROUND(error_count * 100.0 / total_count, 2)
+| WHERE error_rate > 10
+```
+
+---
+
+## �🛠️ Tech Stack
 
 ### Frontend
 - **Next.js 14** — React framework with App Router
@@ -171,6 +216,7 @@ Open [http://localhost:3000](http://localhost:3000) and enter your API key to lo
 
 ## 📡 API Endpoints
 
+### Core API
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Health check |
@@ -180,6 +226,16 @@ Open [http://localhost:3000](http://localhost:3000) and enter your API key to lo
 | `/agent/scan` | POST | Trigger anomaly scan |
 | `/agent/status` | GET | Scanner status |
 | `/audit-logs` | GET/POST/PATCH | Audit trail management |
+
+### ES|QL Endpoints (Agent Builder Integration)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/esql/tools` | GET | List available ES|QL-powered tools |
+| `/esql/error-trends` | GET | Error trends over time |
+| `/esql/service-health` | GET | Service health summary |
+| `/esql/trace/{trace_id}` | GET | Trace request through services |
+| `/esql/anomalies` | GET | Detect anomalous services |
+| `/esql/execute-tool` | POST | Execute an ES|QL tool dynamically |
 
 ---
 

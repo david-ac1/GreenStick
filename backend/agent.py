@@ -210,20 +210,80 @@ class GreenStickAgent:
         | SORT count DESC
         | LIMIT 10
         """
+        return self._execute_esql(query)
+
+    def _execute_esql(self, query: str) -> List[Dict[str, Any]]:
+        """Execute an ES|QL query and return results as list of dicts"""
+        if not self.es_client:
+            return []
         
         try:
             if hasattr(self.es_client, 'esql'):
                 resp = self.es_client.esql.query(query=query)
-                columns = [col['name'] for col in resp['columns']]
+                columns = [col['name'] for col in resp.get('columns', [])]
                 results = []
-                for row in resp['values']:
+                for row in resp.get('values', []):
                     results.append(dict(zip(columns, row)))
                 return results
             else:
-                return [{"service": "checkout-service", "level": "ERROR", "count": 2}]
+                print("ES|QL not available on this Elasticsearch client")
+                return []
         except Exception as e:
             print(f"ES|QL Query failed: {e}")
             return []
+
+    def esql_error_trends(self, hours: int = 24) -> List[Dict[str, Any]]:
+        """Analyze error trends over time using ES|QL"""
+        query = f"""
+        FROM "greenstick-logs"
+        | WHERE level == "ERROR"
+        | EVAL hour = DATE_TRUNC({hours} hours, @timestamp)
+        | STATS error_count = COUNT(*) BY hour
+        | SORT hour DESC
+        | LIMIT {hours}
+        """
+        return self._execute_esql(query)
+
+    def esql_service_health(self) -> List[Dict[str, Any]]:
+        """Get service health summary using ES|QL"""
+        query = """
+        FROM "greenstick-logs"
+        | WHERE @timestamp > NOW() - 1 hour
+        | STATS 
+            total = COUNT(*),
+            errors = COUNT(*) WHERE level == "ERROR",
+            warnings = COUNT(*) WHERE level == "WARN"
+          BY service
+        | EVAL error_rate = ROUND(errors * 100.0 / total, 2)
+        | SORT error_rate DESC
+        """
+        return self._execute_esql(query)
+
+    def esql_trace_analysis(self, trace_id: str) -> List[Dict[str, Any]]:
+        """Trace a request through services using ES|QL"""
+        query = f"""
+        FROM "greenstick-logs"
+        | WHERE trace_id == "{trace_id}"
+        | SORT @timestamp ASC
+        | KEEP @timestamp, service, level, message
+        """
+        return self._execute_esql(query)
+
+    def esql_anomaly_detection(self) -> List[Dict[str, Any]]:
+        """Detect anomalies by finding services with unusual error rates using ES|QL"""
+        query = """
+        FROM "greenstick-logs"
+        | WHERE @timestamp > NOW() - 15 minutes
+        | STATS 
+            error_count = COUNT(*) WHERE level == "ERROR",
+            total_count = COUNT(*)
+          BY service
+        | WHERE error_count > 0
+        | EVAL error_rate = ROUND(error_count * 100.0 / total_count, 2)
+        | WHERE error_rate > 10
+        | SORT error_rate DESC
+        """
+        return self._execute_esql(query)
 
     async def _generate_plan(self, incident: List[Dict[str, Any]], history: List[Dict[str, Any]], correlations: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not self.model:

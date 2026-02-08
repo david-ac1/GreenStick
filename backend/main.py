@@ -7,6 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from agent import GreenStickAgent
 from scanner import AnomalyScanner, init_scanner, get_scanner
+from tools import get_tool_definitions, execute_tool
 from elasticsearch import Elasticsearch
 
 # Load .env from the backend directory
@@ -238,6 +239,83 @@ async def report_incident(incident: NewIncident, authorized: bool = Depends(veri
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ ES|QL Endpoints (Elastic Agent Builder Integration) ============
+
+@app.get("/esql/tools")
+async def list_esql_tools(authorized: bool = Depends(verify_api_key)):
+    """
+    List available ES|QL-powered tools.
+    Aligns with Elastic Agent Builder's tool-based architecture.
+    """
+    return {"tools": get_tool_definitions()}
+
+@app.get("/esql/error-trends")
+async def get_error_trends(hours: int = 24, authorized: bool = Depends(verify_api_key)):
+    """
+    Get error trends over time using ES|QL.
+    """
+    try:
+        results = agent.esql_error_trends(hours)
+        return {"hours": hours, "trends": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/esql/service-health")
+async def get_service_health(authorized: bool = Depends(verify_api_key)):
+    """
+    Get service health summary using ES|QL.
+    """
+    try:
+        results = agent.esql_service_health()
+        return {"services": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/esql/trace/{trace_id}")
+async def trace_request(trace_id: str, authorized: bool = Depends(verify_api_key)):
+    """
+    Trace a request through services using ES|QL.
+    """
+    try:
+        results = agent.esql_trace_analysis(trace_id)
+        return {"trace_id": trace_id, "events": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/esql/anomalies")
+async def detect_anomalies(authorized: bool = Depends(verify_api_key)):
+    """
+    Detect services with unusual error rates using ES|QL.
+    """
+    try:
+        results = agent.esql_anomaly_detection()
+        return {"anomalies": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ToolExecutionRequest(BaseModel):
+    tool_id: str
+    params: Dict[str, Any]
+
+@app.post("/esql/execute-tool")
+async def execute_esql_tool(request: ToolExecutionRequest, authorized: bool = Depends(verify_api_key)):
+    """
+    Execute a specific ES|QL-powered tool with parameters.
+    """
+    if not es_client:
+        raise HTTPException(status_code=503, detail="Elasticsearch not configured")
+    
+    try:
+        results = execute_tool(request.tool_id, request.params, es_client)
+        return {"tool_id": request.tool_id, "results": results}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============ End ES|QL Endpoints ============
 
 
 class AuditLogEntry(BaseModel):
