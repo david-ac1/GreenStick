@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from .agent import GreenStickAgent
+from .scanner import AnomalyScanner, init_scanner, get_scanner
 from elasticsearch import Elasticsearch
 
 # Load .env from the backend directory
@@ -50,6 +51,10 @@ agent = GreenStickAgent(
     es_endpoint=os.getenv("ELASTIC_ENDPOINT"),
     gemini_api_key=os.getenv("GEMINI_API_KEY")
 )
+
+# Initialize Scanner
+scanner = init_scanner(es_client, agent)
+print("Anomaly Scanner initialized")
 
 class IncidentQuery(BaseModel):
     query: str
@@ -170,6 +175,30 @@ async def get_history(authorized: bool = Depends(verify_api_key)):
     Retrieve agent action history.
     """
     return {"history": []}
+
+@app.get("/agent/status")
+async def get_agent_status(authorized: bool = Depends(verify_api_key)):
+    """
+    Get current scanner/agent status.
+    """
+    if scanner:
+        return scanner.get_status()
+    return {"status": "not_initialized", "is_scanning": False}
+
+@app.post("/agent/scan")
+async def trigger_scan(authorized: bool = Depends(verify_api_key)):
+    """
+    Manually trigger an anomaly scan.
+    Returns detected anomalies and any triggered analyses.
+    """
+    if not scanner:
+        raise HTTPException(status_code=503, detail="Scanner not initialized")
+    
+    try:
+        result = await scanner.scan_for_anomalies()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 class NewIncident(BaseModel):
     service: str

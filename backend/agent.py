@@ -122,27 +122,57 @@ class GreenStickAgent:
             print(f"Failed to log audit entry: {e}")
 
     def _fetch_recent_errors(self, query_term: str) -> List[Dict[str, Any]]:
+        """Fetch recent errors, trying exact trace_id match first, then falling back to recent errors."""
         if not self.es_client:
+            print("No Elasticsearch client available")
             return []
             
         try:
+            # First try exact trace_id match
             response = self.es_client.search(index="greenstick-logs", body={
                 "query": {
                     "bool": {
-                        "must": [
-                            {"match": {"level": "ERROR"}},
-                            {"multi_match": {
-                                "query": query_term,
-                                "fields": ["message", "service", "trace_id"]
-                            }}
-                        ]
+                        "should": [
+                            {"term": {"trace_id": query_term}},
+                            {"match": {"trace_id": query_term}}
+                        ],
+                        "minimum_should_match": 1
                     }
                 },
-                "size": 5,
+                "size": 10,
                 "sort": [{"@timestamp": {"order": "desc"}}]
             })
             
             hits = response.get("hits", {}).get("hits", [])
+            if hits:
+                print(f"Found {len(hits)} logs matching trace_id: {query_term}")
+                return [hit["_source"] for hit in hits]
+            
+            # If no exact match, get recent ERROR logs
+            print(f"No exact match for {query_term}, fetching recent errors...")
+            response = self.es_client.search(index="greenstick-logs", body={
+                "query": {
+                    "match": {"level": "ERROR"}
+                },
+                "size": 10,
+                "sort": [{"@timestamp": {"order": "desc"}}]
+            })
+            
+            hits = response.get("hits", {}).get("hits", [])
+            if hits:
+                print(f"Found {len(hits)} recent ERROR logs")
+                return [hit["_source"] for hit in hits]
+            
+            # Final fallback: get any recent logs
+            print("No ERROR logs found, fetching any recent logs...")
+            response = self.es_client.search(index="greenstick-logs", body={
+                "query": {"match_all": {}},
+                "size": 10,
+                "sort": [{"@timestamp": {"order": "desc"}}]
+            })
+            
+            hits = response.get("hits", {}).get("hits", [])
+            print(f"Found {len(hits)} total logs")
             return [hit["_source"] for hit in hits]
             
         except Exception as e:

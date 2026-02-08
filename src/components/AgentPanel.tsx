@@ -50,7 +50,7 @@ export default function AgentPanel() {
     };
 
     return (
-        <div className="bg-white border border-slate-300 rounded-sm shadow-xl overflow-hidden">
+        <div className="bg-white border border-slate-300 rounded-sm shadow-xl overflow-hidden h-full flex flex-col">
             <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between bg-black text-white">
                 <div className="flex items-center gap-3">
                     <span className="material-symbols-outlined text-lg">smart_toy</span>
@@ -64,7 +64,7 @@ export default function AgentPanel() {
                 </div>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 flex-1 overflow-y-auto">
                 {/* Input Section */}
                 <div className="flex gap-2">
                     <input
@@ -154,18 +154,28 @@ export default function AgentPanel() {
                         </div>
 
                         {/* Approval Section */}
-                        {analysis.execution?.approval_required && (
-                            <div className="flex gap-2">
-                                <button className="flex-1 px-4 py-2 bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-emerald-700">
-                                    <span className="material-symbols-outlined text-sm mr-2">check</span>
-                                    Approve Action
-                                </button>
-                                <button className="flex-1 px-4 py-2 bg-rose-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-rose-700">
-                                    <span className="material-symbols-outlined text-sm mr-2">close</span>
-                                    Reject
-                                </button>
-                            </div>
-                        )}
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => {
+                                    console.log('[Agent] Approve clicked');
+                                    alert('Action approved! In production, this would execute the remediation.');
+                                }}
+                                className="flex-1 px-4 py-2 bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-emerald-700"
+                            >
+                                <span className="material-symbols-outlined text-sm mr-2">check</span>
+                                Approve Action
+                            </button>
+                            <button
+                                onClick={() => {
+                                    console.log('[Agent] Reject clicked');
+                                    alert('Action rejected. The incident will be escalated for manual review.');
+                                }}
+                                className="flex-1 px-4 py-2 bg-rose-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-rose-700"
+                            >
+                                <span className="material-symbols-outlined text-sm mr-2">close</span>
+                                Reject
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

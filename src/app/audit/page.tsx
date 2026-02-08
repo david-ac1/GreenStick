@@ -45,17 +45,23 @@ function useAuditLogs() {
     }, [fetchLogs]);
 
     const updateStatus = async (logId: string, status: string) => {
+        console.log(`[Audit] Updating log ${logId} to status: ${status}`);
         try {
             const response = await fetch(`/api/audit-logs?id=${logId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status }),
             });
+            console.log(`[Audit] Response status: ${response.status}`);
+            const data = await response.json();
+            console.log('[Audit] Response data:', data);
             if (response.ok) {
                 fetchLogs();
+            } else {
+                console.error('[Audit] Update failed:', data);
             }
         } catch (err) {
-            console.error('Failed to update status:', err);
+            console.error('[Audit] Failed to update status:', err);
         }
     };
 

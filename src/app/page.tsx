@@ -77,6 +77,29 @@ export default function Dashboard() {
   const { stats, incidents, loading, refresh } = useDashboardData();
   const { user, logout } = useAuth();
   const [showReportModal, setShowReportModal] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<{ anomalies_detected?: number } | null>(null);
+
+  const handleScan = async () => {
+    console.log('[Dashboard] Scan Now clicked');
+    setIsScanning(true);
+    setScanResult(null);
+    try {
+      console.log('[Dashboard] Calling /api/agent/scan...');
+      const response = await fetch('/api/agent/scan', { method: 'POST' });
+      console.log('[Dashboard] Scan response status:', response.status);
+      const data = await response.json();
+      console.log('[Dashboard] Scan result:', data);
+      setScanResult(data);
+      if (response.ok) {
+        refresh(); // Refresh data after scan
+      }
+    } catch (error) {
+      console.error('[Dashboard] Scan failed:', error);
+    } finally {
+      setIsScanning(false);
+    }
+  };
 
   return (
     <AuthGate>
@@ -150,6 +173,16 @@ export default function Dashboard() {
               >
                 <span className="material-symbols-outlined text-sm">add_alert</span>
                 Report Incident
+              </button>
+              <button
+                onClick={handleScan}
+                disabled={isScanning}
+                className={`${isScanning ? 'bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-700'} text-white text-[10px] font-bold px-4 py-2 rounded-sm transition-colors flex items-center gap-2 uppercase tracking-widest disabled:opacity-75`}
+              >
+                <span className={`material-symbols-outlined text-sm ${isScanning ? 'animate-spin' : ''}`}>
+                  {isScanning ? 'progress_activity' : 'radar'}
+                </span>
+                {isScanning ? 'Scanning...' : scanResult?.anomalies_detected ? `✓ ${scanResult.anomalies_detected} Found` : 'Scan Now'}
               </button>
               <button
                 onClick={refresh}
