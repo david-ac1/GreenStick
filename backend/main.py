@@ -5,8 +5,8 @@ from typing import Optional, List, Dict, Any
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from .agent import GreenStickAgent
-from .scanner import AnomalyScanner, init_scanner, get_scanner
+from agent import GreenStickAgent
+from scanner import AnomalyScanner, init_scanner, get_scanner
 from elasticsearch import Elasticsearch
 
 # Load .env from the backend directory
