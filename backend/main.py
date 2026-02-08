@@ -295,6 +295,17 @@ async def detect_anomalies(authorized: bool = Depends(verify_api_key)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/esql/correlations")
+async def get_correlations(timeframe_minutes: int = 60, authorized: bool = Depends(verify_api_key)):
+    """
+    Find correlated errors across multiple services (Cascading Failures).
+    """
+    try:
+        results = agent.esql_correlated_errors(timeframe_minutes)
+        return {"timeframe_minutes": timeframe_minutes, "correlations": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 class ToolExecutionRequest(BaseModel):
     tool_id: str
     params: Dict[str, Any]

@@ -92,14 +92,15 @@ AGENT_TOOLS: Dict[str, AgentTool] = {
     ),
     
     "service_correlation": AgentTool(
-        name="Service Correlation",
-        description="Find correlated errors across multiple services",
+        name="Cascading Failure Detector",
+        description="Find traces that caused errors across MULTIPLE services (correlated failures).",
         esql_template="""
             FROM "greenstick-logs"
             | WHERE level == "ERROR" AND @timestamp > NOW() - {timeframe}
-            | STATS error_count = COUNT(*) BY service, trace_id
-            | WHERE error_count > 1
+            | STATS error_count = COUNT(*), distinct_services = COUNT_DISTINCT(service) BY trace_id
+            | WHERE distinct_services > 1
             | SORT error_count DESC
+            | LIMIT 20
         """,
         parameters={"timeframe": "str"}
     ),

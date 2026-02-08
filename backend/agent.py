@@ -212,6 +212,20 @@ class GreenStickAgent:
         """
         return self._execute_esql(query)
 
+    def esql_correlated_errors(self, timeframe_minutes: int = 60) -> List[Dict[str, Any]]:
+        """
+        Finds traces that have errors across multiple services (Cascading Failures).
+        """
+        query = f"""
+        FROM "greenstick-logs"
+        | WHERE level == "ERROR" AND @timestamp > NOW() - {timeframe_minutes} minutes
+        | STATS error_count = COUNT(*), distinct_services = COUNT_DISTINCT(service) BY trace_id
+        | WHERE distinct_services > 1
+        | SORT error_count DESC
+        | LIMIT 20
+        """
+        return self._execute_esql(query)
+
     def _execute_esql(self, query: str) -> List[Dict[str, Any]]:
         """Execute an ES|QL query and return results as list of dicts"""
         if not self.es_client:
