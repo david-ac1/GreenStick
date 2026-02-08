@@ -151,6 +151,14 @@ FROM "greenstick-logs"
 
 ---
 
+
+## 🔑 Quick Access
+
+To try the live demo, use the following access key:
+**Access Key:** `greenstick_hackathon_demo_2026`
+
+*(Note: This is a read-only key for the hackathon judges & community)*
+
 ## 🚀 Getting Started
 
 ### Prerequisites

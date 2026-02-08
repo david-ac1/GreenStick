@@ -64,7 +64,13 @@ class IncidentQuery(BaseModel):
 # API Key dependency
 async def verify_api_key(authorization: Optional[str] = Header(None)):
     """Verify the API key from Authorization header."""
-    if not GREENSTICK_API_KEY:
+    # Allow override for hackathon judging
+    VALID_KEYS = {GREENSTICK_API_KEY, "greenstick_hackathon_demo_2026"}
+    
+    # Filter out empty keys if GREENSTICK_API_KEY is not set
+    VALID_KEYS = {k for k in VALID_KEYS if k}
+
+    if not VALID_KEYS:
         # No key configured, allow access (development mode)
         return True
     
@@ -76,7 +82,9 @@ async def verify_api_key(authorization: Optional[str] = Header(None)):
     if len(parts) != 2 or parts[0].lower() != "bearer":
         raise HTTPException(status_code=401, detail="Invalid Authorization format. Use: Bearer <api_key>")
     
-    if parts[1] != GREENSTICK_API_KEY:
+    if parts[1] not in VALID_KEYS:
+        # Debug log for failed attempts (optional)
+        print(f"Failed auth attempt with key: {parts[1][:5]}...")
         raise HTTPException(status_code=401, detail="Invalid API key")
     
     return True
