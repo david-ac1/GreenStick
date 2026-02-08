@@ -306,4 +306,35 @@ async def create_audit_log(entry: AuditLogEntry, authorized: bool = Depends(veri
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class UpdateAuditStatus(BaseModel):
+    status: str  # "approved" or "rejected"
+
+@app.patch("/audit-logs/{log_id}")
+async def update_audit_log_status(log_id: str, update: UpdateAuditStatus, authorized: bool = Depends(verify_api_key)):
+    """
+    Update the status of an audit log entry (approve/reject).
+    """
+    if not es_client:
+        raise HTTPException(status_code=503, detail="Elasticsearch not configured")
+    
+    if update.status not in ["approved", "rejected", "pending"]:
+        raise HTTPException(status_code=400, detail="Status must be 'approved', 'rejected', or 'pending'")
+    
+    try:
+        es_client.update(
+            index="greenstick-audit",
+            id=log_id,
+            body={"doc": {"status": update.status}},
+            refresh=True
+        )
+        
+        return {
+            "success": True,
+            "id": log_id,
+            "status": update.status
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 

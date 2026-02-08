@@ -74,3 +74,50 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+
+export async function PATCH(request: NextRequest) {
+    try {
+        const cookieStore = await cookies();
+        const apiKey = cookieStore.get('greenstick_api_key')?.value;
+
+        if (!apiKey) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const { searchParams } = new URL(request.url);
+        const logId = searchParams.get('id');
+
+        if (!logId) {
+            return NextResponse.json({ error: 'Missing log ID' }, { status: 400 });
+        }
+
+        const body = await request.json();
+
+        const response = await fetch(`${BACKEND_URL}/audit-logs/${logId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            return NextResponse.json(
+                { error: errorData.detail || 'Failed to update audit log' },
+                { status: response.status }
+            );
+        }
+
+        const data = await response.json();
+        return NextResponse.json(data);
+    } catch (error) {
+        console.error('Update audit log error:', error);
+        return NextResponse.json(
+            { error: 'Failed to update audit log', details: String(error) },
+            { status: 500 }
+        );
+    }
+}
+

@@ -44,7 +44,22 @@ function useAuditLogs() {
         return () => clearInterval(interval);
     }, [fetchLogs]);
 
-    return { logs, total, loading, error, refresh: fetchLogs };
+    const updateStatus = async (logId: string, status: string) => {
+        try {
+            const response = await fetch(`/api/audit-logs?id=${logId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status }),
+            });
+            if (response.ok) {
+                fetchLogs();
+            }
+        } catch (err) {
+            console.error('Failed to update status:', err);
+        }
+    };
+
+    return { logs, total, loading, error, refresh: fetchLogs, updateStatus };
 }
 
 function formatTimestamp(timestamp: string) {
@@ -80,7 +95,7 @@ function getStatusBadge(status: string) {
 }
 
 export default function AuditPage() {
-    const { logs, total, loading, refresh } = useAuditLogs();
+    const { logs, total, loading, refresh, updateStatus } = useAuditLogs();
     const { logout, user } = useAuth();
 
     return (
@@ -173,6 +188,7 @@ export default function AuditPage() {
                                         <th className="px-4 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Description</th>
                                         <th className="w-24 px-4 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Confidence</th>
                                         <th className="w-28 px-4 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Status</th>
+                                        <th className="w-32 px-4 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-zinc-800">
@@ -212,6 +228,28 @@ export default function AuditPage() {
                                                     <span className={`text-[10px] font-bold uppercase tracking-widest ${getStatusBadge(log.status)}`}>
                                                         {log.status}
                                                     </span>
+                                                </td>
+                                                <td className="px-4 py-4">
+                                                    {log.status === 'pending' ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                onClick={() => updateStatus(log.id, 'approved')}
+                                                                className="p-1.5 bg-zinc-900 hover:bg-emerald-600 text-zinc-400 hover:text-white border border-zinc-700 transition-all"
+                                                                title="Approve"
+                                                            >
+                                                                <span className="material-symbols-outlined text-sm">check</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => updateStatus(log.id, 'rejected')}
+                                                                className="p-1.5 bg-zinc-900 hover:bg-rose-600 text-zinc-400 hover:text-white border border-zinc-700 transition-all"
+                                                                title="Reject"
+                                                            >
+                                                                <span className="material-symbols-outlined text-sm">close</span>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[10px] text-zinc-600">—</span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         );
