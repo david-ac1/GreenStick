@@ -27,11 +27,18 @@ interface ErrorTrend {
     error_count: number;
 }
 
+interface Correlation {
+    trace_id: string;
+    error_count: number;
+    distinct_services: number;
+}
+
 export default function ESQLDashboard() {
     const { user, logout } = useAuth();
     const [tools, setTools] = useState<ToolDefinition[]>([]);
     const [health, setHealth] = useState<ServiceHealth[]>([]);
     const [trends, setTrends] = useState<ErrorTrend[]>([]);
+    const [correlations, setCorrelations] = useState<Correlation[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedTool, setSelectedTool] = useState<string | null>(null);
     const [toolParams, setToolParams] = useState<Record<string, string>>({});
@@ -41,15 +48,17 @@ export default function ESQLDashboard() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [toolsRes, healthRes, trendsRes] = await Promise.all([
+                const [toolsRes, healthRes, trendsRes, corrRes] = await Promise.all([
                     fetch('/api/esql/tools'),
                     fetch('/api/esql/service-health'),
-                    fetch('/api/esql/error-trends?hours=24')
+                    fetch('/api/esql/error-trends?hours=24'),
+                    fetch('/api/esql/correlations?timeframe_minutes=60')
                 ]);
 
                 if (toolsRes.ok) setTools((await toolsRes.json()).tools);
                 if (healthRes.ok) setHealth((await healthRes.json()).services);
                 if (trendsRes.ok) setTrends((await trendsRes.json()).trends);
+                if (corrRes.ok) setCorrelations((await corrRes.json()).correlations);
             } catch (error) {
                 console.error("Failed to fetch dashboard data:", error);
             } finally {
@@ -82,6 +91,16 @@ export default function ESQLDashboard() {
             setToolResult({ error: String(error) });
         } finally {
             setExecuting(false);
+        }
+    };
+
+    const handleTraceClick = (traceId: string) => {
+        const traceTool = tools.find(t => t.id === 'trace_request');
+        if (traceTool) {
+            setSelectedTool(traceTool.id);
+            setToolParams({ trace_id: traceId });
+            // Optional: auto-scroll to tool area
+            document.getElementById('tool-executor')?.scrollIntoView({ behavior: 'smooth' });
         }
     };
 
@@ -150,26 +169,69 @@ export default function ESQLDashboard() {
 
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
-                        {/* Service Health Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {health.map((svc) => (
-                                <div key={svc.service} className="bg-white p-4 border border-slate-200 shadow-sm rounded-sm">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h3 className="font-bold text-sm text-slate-700">{svc.service}</h3>
-                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${svc.error_rate > 5 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                            {svc.error_rate}% Errors
-                                        </span>
+                        {/* Top Row: Service Health & Cascading Failures */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Service Health Grid (2 cols) */}
+                            <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {health.map((svc) => (
+                                    <div key={svc.service} className="bg-white p-4 border border-slate-200 shadow-sm rounded-sm">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <h3 className="font-bold text-sm text-slate-700">{svc.service}</h3>
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${svc.error_rate > 5 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                {svc.error_rate}% Errors
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-4 text-xs text-slate-500 mt-2 font-mono">
+                                            <span>Total: {svc.total}</span>
+                                            <span className="text-rose-600">Errors: {svc.errors}</span>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-4 text-xs text-slate-500 mt-2 font-mono">
-                                        <span>Total: {svc.total}</span>
-                                        <span className="text-rose-600">Errors: {svc.errors}</span>
-                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Cascading Failures Widget (1 col) */}
+                            <div className="bg-white border border-rose-200 shadow-sm rounded-sm overflow-hidden flex flex-col h-full">
+                                <div className="px-4 py-3 border-b border-rose-100 bg-rose-50 flex items-center justify-between">
+                                    <h3 className="text-xs font-bold uppercase tracking-widest text-rose-800 flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-sm">hub</span>
+                                        Cascading Failures
+                                    </h3>
+                                    <span className="text-[9px] font-mono text-rose-600 bg-white px-1.5 py-0.5 rounded border border-rose-100">Last Hour</span>
                                 </div>
-                            ))}
+                                <div className="flex-1 overflow-y-auto p-0 divide-y divide-rose-50 max-h-[300px] lg:max-h-none">
+                                    {correlations.map(c => (
+                                        <button
+                                            key={c.trace_id}
+                                            className="w-full text-left flex justify-between items-center px-4 py-3 hover:bg-rose-50 transition-colors group"
+                                            onClick={() => handleTraceClick(c.trace_id)}
+                                        >
+                                            <div className="flex flex-col">
+                                                <span className="font-mono text-xs text-slate-600 group-hover:text-black font-bold">{c.trace_id.slice(0, 8)}...</span>
+                                                <span className="text-[10px] text-slate-400">Click to trace</span>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-0.5">
+                                                <div className="flex items-center gap-1">
+                                                    <span className="font-bold text-xs text-rose-600">{c.error_count}</span>
+                                                    <span className="text-[9px] uppercase text-slate-400">Errors</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <span className="font-bold text-xs text-slate-600">{c.distinct_services}</span>
+                                                    <span className="text-[9px] uppercase text-slate-400">Services</span>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                    {correlations.length === 0 && !loading && (
+                                        <div className="p-8 text-center text-slate-400 text-xs italic">
+                                            No correlated failures detected.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
 
                         {/* Tools Execution Section */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="tool-executor">
 
                             {/* Tool Selector */}
                             <div className="bg-white border border-slate-200 shadow-sm rounded-sm overflow-hidden lg:col-span-1">
