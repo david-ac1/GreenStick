@@ -3,19 +3,21 @@ import { cookies } from 'next/headers';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
-export async function GET(request: NextRequest, { params }: { params: { slug: string[] } }) {
-    return handleRequest(request, params, 'GET');
+export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string[] }> }) {
+    const resolvedParams = await params;
+    return handleRequest(request, resolvedParams, 'GET');
 }
 
-export async function POST(request: NextRequest, { params }: { params: { slug: string[] } }) {
-    return handleRequest(request, params, 'POST');
+export async function POST(request: NextRequest, { params }: { params: Promise<{ slug: string[] }> }) {
+    const resolvedParams = await params;
+    return handleRequest(request, resolvedParams, 'POST');
 }
 
 async function handleRequest(request: NextRequest, params: { slug: string[] }, method: string) {
     try {
         const cookieStore = await cookies();
         const apiKey = cookieStore.get('greenstick_api_key')?.value;
-        const slug = await params.slug; // Await params in newer Next.js versions
+        const slug = params.slug; // Params are already resolved
         const path = slug.join('/');
 
         if (!apiKey) {
