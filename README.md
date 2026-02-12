@@ -261,6 +261,9 @@ This creates realistic log entries, incidents, and audit records for testing.
 ---
 
 ## 📸 Screenshots
+<img width="1914" height="824" alt="Screenshot 2026-02-12 143134" src="https://github.com/user-attachments/assets/21e1bdf9-fa49-486a-8dc5-2a3b3235da9b" />
+<img width="1919" height="819" alt="Screenshot 2026-02-12 143750" src="https://github.com/user-attachments/assets/75a7c900-e8fe-45ac-a924-7526565b9e7e" />
+<img width="1918" height="821" alt="Screenshot 2026-02-12 143728" src="https://github.com/user-attachments/assets/24b2be19-cb86-4993-b13c-46eb80f2a86e" />
 
 ### Dashboard
 - Real-time statistics cards
